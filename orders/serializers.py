@@ -81,6 +81,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         from menu.models import MenuItem, MenuItemSize
+        from notifications.utils import (
+            notify_device_on_order_created,
+            notify_admin_on_order_created
+        )
         import uuid
         
         items_data = validated_data.pop('items')
@@ -114,6 +118,20 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 subtotal=size.price * item_data['quantity'],
                 special_instructions=item_data.get('special_instructions', '')
             )
+        
+        # Notifier le client et les admins
+        if order.device:
+            notify_device_on_order_created(
+                device=order.device,
+                order_number=order.order_number,
+                total=order.total
+            )
+        
+        notify_admin_on_order_created(
+            order_number=order.order_number,
+            customer_name=order.customer_name,
+            total=order.total
+        )
         
         return order
 

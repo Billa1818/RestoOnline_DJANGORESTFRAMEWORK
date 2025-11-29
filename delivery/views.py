@@ -14,6 +14,13 @@ from .serializers import (
     DeliveryAssignmentListSerializer, DeliveryLocationSerializer
 )
 from orders.models import Order
+from notifications.utils import (
+    notify_delivery_person_on_assignment,
+    notify_device_on_order_in_delivery,
+    notify_device_on_order_delivered,
+    notify_admin_on_delivery_completed,
+    notify_all_admin
+)
 
 
 class DeliveryAssignmentViewSet(viewsets.ModelViewSet):
@@ -83,6 +90,21 @@ class DeliveryAssignmentViewSet(viewsets.ModelViewSet):
             order.delivery_person = assignment.delivery_person
             order.assigned_at = timezone.now()
             order.save()
+            
+            # Notifier le livreur
+            notify_delivery_person_on_assignment(
+                delivery_person=assignment.delivery_person,
+                order_number=order.order_number,
+                customer_phone=order.customer_phone
+            )
+            
+            # Notifier le client
+            if order.device:
+                notify_device_on_order_in_delivery(
+                    device=order.device,
+                    order_number=order.order_number,
+                    delivery_person_name=assignment.delivery_person.get_full_name()
+                )
             
             return Response(
                 DeliveryAssignmentSerializer(assignment).data,
@@ -236,6 +258,30 @@ class DeliveryAssignmentViewSet(viewsets.ModelViewSet):
         delivery_person = assignment.delivery_person
         delivery_person.total_deliveries += 1
         delivery_person.save()
+        
+        # Notifier le client
+        if order.device:
+            notify_device_on_order_delivered(
+                device=order.device,
+                order_number=order.order_number
+            )
+        
+        # Notifier les admins
+        delivery_time = None
+        if assignment.picked_up_at and assignment.delivered_at:
+            delta = assignment.delivered_at - assignment.picked_up_at
+            hours = delta.seconds // 3600
+            minutes = (delta.seconds % 3600) // 60
+            if hours > 0:
+                delivery_time = f"{hours}h {minutes}m"
+            else:
+                delivery_time = f"{minutes}m"
+        
+        notify_admin_on_delivery_completed(
+            order_number=order.order_number,
+            delivery_person_name=delivery_person.get_full_name(),
+            delivery_time=delivery_time or 'N/A'
+        )
         
         serializer = DeliveryAssignmentSerializer(assignment)
         return Response(serializer.data)

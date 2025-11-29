@@ -16,6 +16,10 @@ from .serializers import (
     ClientDeviceSerializer, ClientDeviceCreateSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
+from notifications.utils import (
+    notify_device_on_new_user_account,
+    notify_all_admin
+)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -309,6 +313,21 @@ class ClientDeviceViewSet(viewsets.ModelViewSet):
             device.device_info = request.data.get('device_info', device.device_info)
             device.fcm_token = request.data.get('fcm_token', device.fcm_token)
             device.save()
+        else:
+            # Créer une notification pour le nouvel appareil
+            customer_name = request.data.get('customer_name', 'Utilisateur')
+            device_name = request.data.get('device_name', '')
+            notify_device_on_new_user_account(
+                device=device,
+                username=customer_name
+            )
+            # Notifier les admins
+            notify_all_admin(
+                type_notification='account_created',
+                title='Nouvel appareil enregistré',
+                message=f'Nouvel appareil: {device_name or device_id}',
+                data={'device_id': device_id, 'customer_name': customer_name}
+            )
         
         serializer = ClientDeviceSerializer(device)
         return Response({

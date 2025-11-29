@@ -13,6 +13,14 @@ from .serializers import (
     OrderSerializer, OrderCreateSerializer, OrderListSerializer,
     CartSerializer, CartItemSerializer
 )
+from notifications.utils import (
+    notify_device_on_order_created,
+    notify_admin_on_order_created,
+    notify_device_on_order_accepted,
+    notify_device_on_order_refused,
+    notify_device_on_order_ready,
+    notify_all_admin
+)
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -22,7 +30,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     lookup_field = 'order_number'
     
     def get_permissions(self):
-        if self.action in ['create', 'track']:
+        if self.action in ['create', 'track', 'list', 'pending', 'active', 'retrieve']:
             return [AllowAny()]
         return [IsAuthenticated()]
     
@@ -86,6 +94,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.accepted_at = timezone.now()
         order.save()
         
+        # Notifier le client
+        if order.device:
+            notify_device_on_order_accepted(
+                device=order.device,
+                order_number=order.order_number
+            )
+        
         serializer = OrderSerializer(order)
         return Response(serializer.data)
     
@@ -100,10 +115,19 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        reason = request.data.get('reason', '')
         order.status = 'refused'
         order.manager = request.user
-        order.refusal_reason = request.data.get('reason', '')
+        order.refusal_reason = reason
         order.save()
+        
+        # Notifier le client
+        if order.device:
+            notify_device_on_order_refused(
+                device=order.device,
+                order_number=order.order_number,
+                reason=reason
+            )
         
         serializer = OrderSerializer(order)
         return Response(serializer.data)
@@ -138,6 +162,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = 'ready'
         order.ready_at = timezone.now()
         order.save()
+        
+        # Notifier le client
+        if order.device:
+            notify_device_on_order_ready(
+                device=order.device,
+                order_number=order.order_number
+            )
         
         return Response({'status': 'ready'})
     

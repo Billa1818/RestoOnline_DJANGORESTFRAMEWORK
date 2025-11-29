@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'menu',
     'payments',
     'ratings',
+    'notifications',
     
 ]
 
