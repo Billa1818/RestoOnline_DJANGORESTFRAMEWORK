@@ -1,2 +1,2 @@
 # RestoOnline_DJANGORESTFRAMEWORK
-NB: endpoints client uniquement verifier
+NB: endpoints clients uniquement verifier
